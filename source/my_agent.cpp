@@ -13,7 +13,7 @@ string Request_Echo(vector<string> args);
 //! Our SimpleAgent object
 SimpleAgent *agent;
 //! Our temperature sensor device
-Device *temp_sensor;
+TemperatureSensor *temp_sensor;
 
 int main() {
 	
@@ -24,12 +24,14 @@ int main() {
 	// As an example, we can add a temperature sensor device
 	temp_sensor = agent->NewDevice<TemperatureSensor>("temp_sensor");
 	
-	// Add a couple of COSMOS properties
-	temp_sensor->AddProperty<TemperatureSensor::UTC>();
-	temp_sensor->AddProperty<TemperatureSensor::Temperature>();
+	auto imu = agent->NewDevice<IMU>("imu");
+	imu->Post(imu->magnetic_field);
 	
-	// Add a custom property
-	temp_sensor->SetProperty<int>("counter", 0);
+	// Add a couple of COSMOS properties
+	temp_sensor->Post(temp_sensor->utc);
+	temp_sensor->Post(temp_sensor->temperature);
+	temp_sensor->utc = 0;
+	temp_sensor->temperature = 0;
 	
 	
 	// Add the "say_hi" request with aliases "say_hi" and "greeting"
@@ -49,16 +51,11 @@ int main() {
 	// Start running the agent
 	while ( agent->StartLoop() ) {
 		
+		imu->magnetic_field = Vec3(0, i, 0);
+		
 		// Timestamp the device
-		temp_sensor->Timestamp<TemperatureSensor>();
-		
-		// Set the temperature property to some value
-		temp_sensor->SetProperty<TemperatureSensor::Temperature>(273.15 + i * 2);
-		
-		// Set the counter property
-		temp_sensor->SetProperty<int>("counter", i);
-		
-		++i;
+		temp_sensor->utc = currentmjd();
+		temp_sensor->temperature = i++;
 	}
 	
 	return 0;

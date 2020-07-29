@@ -231,7 +231,7 @@ void SimpleAgent::DebugPrint(bool print_all) const {
 	printf("Devices\n");
 	for (auto device_pair : devices) {
 		printf("|\t| Device '%s'\n", device_pair.first.c_str());
-		device_pair.second->DebugPrint(print_all);
+		device_pair.second->DebugPrint();
 	}
 	
 	// Print all requests
@@ -260,7 +260,7 @@ std::string SimpleAgent::GetDebugString(bool print_all) const {
 	ss << "Devices\n";
 	for (auto device_pair : devices) {
 		ss << "|\t| Device '" << device_pair.first << "'\n";
-		device_pair.second->GetDebugString(ss, print_all);
+		device_pair.second->GetDebugString(ss);
 	}
 	
 	// Print all requests
@@ -358,31 +358,31 @@ std::string cubesat::_Request_GetProperty(std::vector<std::string> args) {
 	output << "{";
 	
 	// Go through each given device
-	for (const std::string &arg : args) {
+//	for (const std::string &arg : args) {
 		
-		// Get the device:property delimiter
-		unsigned int colon_index = arg.find(":");
+//		// Get the device:property delimiter
+//		unsigned int colon_index = arg.find(":");
 		
-		// Make sure the format is correct
-		if ( colon_index == string::npos ) {
-			return "";
-		}
+//		// Make sure the format is correct
+//		if ( colon_index == string::npos ) {
+//			return "";
+//		}
 		
-		// Get the device and property names
-		string device_name = arg.substr(0, colon_index);
-		string property_name = arg.substr(colon_index + 1);
+//		// Get the device and property names
+//		string device_name = arg.substr(0, colon_index);
+//		string property_name = arg.substr(colon_index + 1);
 		
-		// Make sure the device exists
-		if ( !agent->DeviceExists(device_name) )
-			continue;
+//		// Make sure the device exists
+//		if ( !agent->DeviceExists(device_name) )
+//			continue;
 		
-		Device *device = agent->GetDevice(device_name);
-		std::string value = device->GetPropertyStringByName(property_name);
+//		Device *device = agent->GetDevice(device_name);
+//		std::string value = device->GetPropertyStringByName(property_name);
 		
-		if ( !value.empty() ) {
-			output << "\"" << device_name << "\": \"" << value << "\", ";
-		}
-	}
+//		if ( !value.empty() ) {
+//			output << "\"" << device_name << "\": \"" << value << "\", ";
+//		}
+//	}
 	
 	output << "}";
 	

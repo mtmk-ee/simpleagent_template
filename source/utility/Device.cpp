@@ -4,62 +4,6 @@
 using namespace std;
 using namespace cubesat;
 
-
-
-void Device::StorePostedProperties(std::vector<std::string> &keys) {
-	
-	// Go through each COSMOS property
-	for (auto property_pair : cosmos_properties) {
-		
-		// Check if the property should be posted
-		if ( property_pair.second.post ) {
-			
-			// Add the COSMOS name for the property
-			keys.push_back(property_pair.second.cosmos_name);
-		}
-	}
-}
-
-//===============================================================
-//============================ DEBUG ============================
-//===============================================================
-
-void Device::DebugPrint(bool print_all) const {
-	
-	// Print the COSMOS properties
-	for (auto property_pair : cosmos_properties) {
-		if ( print_all || property_pair.second.post )
-			printf("|\t|\t| COSMOS Property '%s' (aka %s): %s\n",
-				   property_pair.second.readable_name.c_str(),
-				   property_pair.second.cosmos_name.c_str(),
-				   property_pair.second.value_string.c_str());
-	}
-	
-	// Print the custom properties
-	if ( print_all ) {
-		for (auto property_pair : custom_properties) {
-			printf("|\t|\t| Custom Property '%s'\n", property_pair.first.c_str());
-		}
-	}
-}
-
-void Device::GetDebugString(std::stringstream &ss, bool print_all) const {
-	// Print the COSMOS properties
-	for (auto property_pair : cosmos_properties) {
-		if ( print_all || property_pair.second.post )
-			ss << "|\t|\t| COSMOS Property '" << property_pair.second.readable_name <<
-				  "' (aka " << property_pair.second.cosmos_name <<
-				  "): " << property_pair.second.value_string << "\n";
-	}
-	
-	// Print the custom properties
-	if ( print_all ) {
-		for (auto property_pair : custom_properties) {
-			ss << "|\t|\t| Custom Property '" << property_pair.first << "'\n";
-		}
-	}
-}
-
 //===============================================================
 //============================ OTHER ============================
 //===============================================================

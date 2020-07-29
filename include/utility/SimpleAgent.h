@@ -32,6 +32,7 @@
 #include "utility/RemoteAgent.h"
 #include "utility/Device.h"
 #include "utility/StringTools.h"
+#include "utility/TimeTools.h"
 
 
 #include <unordered_map>
@@ -379,8 +380,8 @@ namespace cubesat {
 		 * @param crash_on_error If true, the program will crash if an error occurs
 		 * @return The new device. Don't delete this! Do you want undefined behavior? Because that's how you get undefined behavior
 		 */
-		template <typename _DeviceType>
-		Device* NewDevice(const std::string &name, bool crash_on_error = SIMPLEAGENT_STRICT_MODE) {
+		template <typename DeviceType>
+		DeviceType* NewDevice(const std::string &name, bool crash_on_error = SIMPLEAGENT_STRICT_MODE) {
 			
 			// Check if a device with the given name already exists
 			if ( DeviceExists(name) ) {
@@ -390,12 +391,12 @@ namespace cubesat {
 			else {
 				
 				// Create the piece
-				int pindex = json_createpiece(this->cinfo, name, _DeviceType::type);
+				int pindex = json_createpiece(this->cinfo, name, DeviceType::type);
 				
 				// Check if the piece was succesfully created
 				if ( pindex < 0 ) {
 					
-					printf("Failed to add %s device named '%s': %s\n", GetDeviceTypeString(_DeviceType::type),
+					printf("Failed to add %s device named '%s': %s\n", GetDeviceTypeString(DeviceType::type),
 						   name.c_str(), cosmos_error_string(pindex).c_str());
 					if ( crash_on_error )
 						exit(pindex);
@@ -408,7 +409,8 @@ namespace cubesat {
 				int dindex = this->cinfo->device[cindex].all.didx;
 				
 				// Create the new device
-				Device *device = new Device(GetComplexAgent(), _DeviceType::type, name, pindex, cindex, dindex);
+				DeviceType *device = new DeviceType(GetComplexAgent(), cindex, dindex);
+				device->SetName(name);
 				devices[name] = device;
 				
 				return device;
@@ -433,46 +435,13 @@ namespace cubesat {
 #endif
 		}
 		
-		/**
-		 * @brief Gets a device by name
-		 * @param name The device name
-		 * @return The device, or nullptr if it does not exist
-		 */
-		inline Device* GetDevice(const std::string &name) {
-#if SIMPLEAGENT_IGNORE_CASE
+		template <typename DeviceType>
+		inline DeviceType* GetDevice(const std::string &name) {
 			for (auto device_pair : devices) {
-				if ( CompareAndIgnoreCase(name, device_pair.first) )
-					return device_pair.second;
+				if ( name == device_pair.first )
+					return dynamic_cast<DeviceType*>(device_pair.second);
 			}
 			return nullptr;
-#else
-			// Make sure the device exists
-			if ( DeviceExists(name) )
-				return devices[name];
-			else
-				return nullptr;
-#endif
-		}
-		
-		/**
-		 * @brief Gets a device by name
-		 * @param name The device name
-		 * @return The device, or nullptr if it does not exist
-		 */
-		inline const Device* GetDevice(const std::string &name) const {
-#if SIMPLEAGENT_IGNORE_CASE
-			for (auto device_pair : devices) {
-				if ( CompareAndIgnoreCase(name, device_pair.first) )
-					return device_pair.second;
-			}
-			return nullptr;
-#else
-			// Make sure the device exists
-			if ( DeviceExists(name) )
-				return devices.at(name);
-			else
-				return nullptr;
-#endif
 		}
 		
 		//===============================================================

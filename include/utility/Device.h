@@ -24,341 +24,495 @@
 namespace cubesat {
 	
 	/**
-	 * @brief A utility class for defining devices and their properties
+	 * @brief Holds information about a device, and allows
+	 * for properties to be posted in an agent's state of health message
 	 */
 	class Device {
-	protected:
-		//! Stores data for a COSMOS device property
-		struct COSMOSProperty {
-			std::string value_string;
-			std::string cosmos_name;
+		struct PostedProperty {
 			std::string readable_name;
-			bool post;
-			
-			//! A default constructor is required for std::unordered_map
-			COSMOSProperty() {}
-			COSMOSProperty (const std::string &value_string, const std::string &cosmos_name, const std::string &readable_name, bool post)
-				: value_string(value_string), cosmos_name(cosmos_name), readable_name(readable_name), post(post) {}
+			std::string cosmos_name;
 		};
-		
-		//! Stores data for a custom property
 		struct CustomProperty {
-			void *value_pointer;
+			void *value;
 			PropertyID value_type;
 			
-			//! A default constructor is required for std::unordered_map
-			CustomProperty() {}
+			CustomProperty() : value(0), value_type(0) {
+				
+			}
+			CustomProperty(const CustomProperty &other) = delete;
+			~CustomProperty() {
+				free(value);
+			}
 			
 			template <typename T>
-			CustomProperty(T value) {
-				// Allocate memory for the value
-				value_pointer = malloc(sizeof(value));
-				
-				// Set the value
-				*(T*)value_pointer = value;
-				
-				// Store the value type
+			bool TypeMatches() {
+				return value_type == GetPropertyID<T>();
+			}
+			
+			template <typename T>
+			void Load(T value_) {
+				value = malloc(sizeof(T));
+				*(T*)value = value_;
 				value_type = GetPropertyID<T>();
 			}
 			
 			template <typename T>
-			bool TypeMatches() const {
-				// Get the property ID of the given type to check if it matches
-				return value_type == GetPropertyID<T>();
+			void Set(T value_) {
+				if ( !TypeMatches<T>() )
+					throw TypeMismatchException("Give type does not match stored type");
+				else
+					*(T*)value = value_;
 			}
+			
 		};
 		
-		
-		
 	public:
-		//! A default constructor is needed for std::unordered_map
-		Device()
-			: agent(nullptr), type(DeviceType::NONE),
-			  pindex(-1), cindex(-1), dindex(-1) {}
-		Device(Agent *agent, DeviceType type, const std::string &device_name,
-			   int pindex, int cindex, int dindex)
-			: agent(agent), type(type), device_name(device_name),
-			  pindex(pindex), cindex(cindex), dindex(dindex) {}
-		~Device() {
-			// Delete the custom properties
-			for (auto pair : custom_properties)
-				delete pair.second;
-			custom_properties.clear();
-		}
+		/**
+		 * @brief Creates a new device
+		 * @param agent The COSMOS agent this device belongs to
+		 * @param cindex The COSMOS component index of this device
+		 * @param dindex The COSMOS device index of this device
+		 * @param cosmos_device_name The COSMOS name for this device
+		 */
+		Device(Agent *agent, int cindex, int dindex, const std::string &cosmos_device_name)
+			: agent(agent), cindex(cindex), dindex(dindex),
+			  cosmos_device_name(cosmos_device_name) {}
+		virtual ~Device() {}
 		
-		//===============================================================
-		//======================== MISCELLANEOUS ========================
-		//===============================================================
 		
 		/**
-		 * @brief Returns the name of this device, as supplied to SimpleAgent::NewDevice()
-		 * @return The device name
+		 * @brief Posts a property to the state of health message
+		 * @tparam _PropertyType The type of property, automatically inferred from the argument.
+		 * @param property The property to post
 		 */
+		template <typename _PropertyType>
+		void Post(const _PropertyType &property) {
+			// Store the property metadata
+			PostedProperty property_data;
+			property_data.readable_name = _PropertyType::MetaData::simple_name;
+			property_data.cosmos_name = _PropertyType::MetaData::cosmos_name;
+			
+			// Store the property
+			cosmos_properties[GetPropertyID<_PropertyType>()] = property_data;
+		}
+		
+		/**
+		 * @brief Adds all posted properties to the given vector
+		 * @param keys The vector of properties to add to
+		 */
+		void StorePostedProperties(std::vector<std::string> &keys) {
+			for (auto property_pair : cosmos_properties) {
+				keys.push_back(GetCOSMOSPropertyName(property_pair.second.cosmos_name));
+			}
+		}
+		
+		/**
+		 * @brief Checks if a custom property with the given name exists.
+		 * @param name The property name
+		 * @return True if the property has been previous set
+		 */
+		bool CustomPropertyExists(const std::string &name) {
+			return custom_properties.find(name) != custom_properties.end();
+		}
+		
+		/**
+		 * @brief Stores a custom property
+		 * @tparam T The value type
+		 * @param name The property name
+		 * @param value The value to store
+		 */
+		template <typename T>
+		void SetCustomProperty(const std::string &name, T value) {
+			if ( CustomPropertyExists(name) )
+				custom_properties[name].Set(value);
+			else
+				custom_properties[name].Load(value);
+		}
+		
+		/**
+		 * @brief Retrieves a custom property from this device
+		 * @tparam T The value type. This MUST match the one supplied in Device::SetCustomProperty().
+		 * @param name The property name
+		 * @return The property.
+		 */
+		template <typename T>
+		T& GetCustomProperty(const std::string &name) {
+			// Make sure the property exists
+			if ( !CustomPropertyExists(name) )
+				throw NonExistentPropertyException(name);
+			
+			CustomProperty &property = custom_properties[name];
+			
+			// Make sure the type matches
+			if ( property.TypeMatches<T>() )
+				return *(T*)property.value;
+			else
+				throw TypeMismatchException("Incorrect type supplied when retrieving property '" + name + "'");
+		}
+		
+		/**
+		 * @brief Prints information about this device
+		 */
+		void DebugPrint() {
+			printf("|\t|\t| Posted Properties\n");
+			for (auto property_pair : cosmos_properties) {
+				printf("|\t|\t|\t| %s (aka %s)\n",
+					   property_pair.second.readable_name.c_str(),
+					   GetCOSMOSPropertyName(property_pair.second.cosmos_name).c_str());
+			}
+		}
+		
+		/**
+		 * @brief Prints information about this device to an std:stringstream
+		 * @param ss The output stream
+		 */
+		void GetDebugString(std::stringstream &ss) {
+			ss << "|\t|\t| Posted Properties\n";
+			for (auto property_pair : cosmos_properties) {
+				ss << "|\t|\t|\t| " << property_pair.second.readable_name.c_str()
+				   << "(aka " << GetCOSMOSPropertyName(property_pair.second.cosmos_name).c_str() << ")\n";
+			}
+		}
+		
+		inline void SetName(const std::string &device_name) {
+			this->device_name = device_name;
+		}
 		inline const std::string& GetName() const {
 			return device_name;
-		}		
-		
-		/**
-		 * @brief Sets the UTC property to the current Modified Julian Date
-		 * @tparam _DeviceType the type of device for this property (e.g. TemperatureSensor)
-		 */
-		template <typename _DeviceType>
-		void Timestamp() {
-			// Set the UTC property using the given device type
-			SetProperty<typename _DeviceType::UTC>(currentmjd());
 		}
-		
-		/**
-		 * @brief (Internal) Adds all posted COSMOS properties the given list
-		 * @param keys The list of properties to add to
-		 */
-		void StorePostedProperties(std::vector<std::string> &keys);
-		
-		//===============================================================
-		//========================= PROPERTIES ==========================
-		//===============================================================
-		
-		/**
-		 * @brief Checks if a COSMOS property with the given name exists
-		 * @tparam _DeviceProperty The device property (e.g. TemperatureSensor::Temperature)
-		 * @return True if the property exists
-		 */
-		template <typename _DeviceProperty, typename T = typename _DeviceProperty::ValueType, size_t offset = _DeviceProperty::offset>
-		typename std::enable_if<std::is_base_of<DeviceProperty<T, offset>, _DeviceProperty>::value, bool>::type
-		PropertyExists() {
-			// Check if the COSMOS property table has a key matching the property ID of the given property
-			return cosmos_properties.find(GetPropertyID<_DeviceProperty>()) != cosmos_properties.end();
-		}
-		
-		/**
-		 * @brief Checks if a custom property with the given name exists
-		 * @tparam T The storage type of the property (not necessary here)
-		 * @param property_name The device property name
-		 * @return True if the property exists
-		 */
-		template <typename T>
-		bool PropertyExists(const std::string &property_name) {
-#if SIMPLEAGENT_IGNORE_CASE
-			for (auto property_pair : custom_properties) {
-				if ( CompareAndIgnoreCase(property_name, property_pair.first) )
-					return true;
-			}
-			return false;
-#else
-			
-			// Check if the custom property table has a correspond key
-			// Is the template parameter really necessary for this function?
-			return custom_properties.find(property_name) != custom_properties.end();
-#endif
-		}
-		
-		/**
-		 * @brief Adds and posts a property. Equivalent to SetProperty<...>(..., true)
-		 * @tparam _DeviceProperty The property type
-		 * @param value The value
-		 */
-		template <typename _DeviceProperty>
-		void AddProperty(typename _DeviceProperty::ValueType value = typename _DeviceProperty::ValueType()) {
-			// Set the property, and flag it as posted
-			SetProperty<_DeviceProperty>(value, true);
-		}
-		
-		/**
-		 * @brief Sets the value of a COSMOS property
-		 * @tparam _DeviceProperty The device property to set (e.g. TemperatureSensor::Temperature)
-		 * @param value The value of the property. The type supplied should be trivially convertible to the once specified by _DeviceProperty
-		 * @param post If true, this property is marked for posting. If this is false on subsequent calls, the property will remain posted
-		 */
-		template <typename _DeviceProperty>
-		void SetProperty(typename _DeviceProperty::ValueType value, bool post = false) {
-			
-			// Check if there's an old value set, and if so, streal its 'post' value
-			if ( cosmos_properties.find(GetPropertyID<_DeviceProperty>()) != cosmos_properties.end() ) {
-				post = cosmos_properties[GetPropertyID<_DeviceProperty>()].post;
-			}
-			
-			// Create the property
-			COSMOSProperty new_property(ToString<typename _DeviceProperty::ValueType>(value), GetCOSMOSPropertyName<_DeviceProperty>(), _DeviceProperty::name, post);
-			
-			// Store the device property using the property ID
-			cosmos_properties[GetPropertyID<_DeviceProperty>()] = new_property;
-			
-			// Set the property value using the DeviceProperty offset
-			// Beware: pointer magic ahead!
-			*(typename _DeviceProperty::ValueType*)((void*)&agent->cinfo->device[cindex] + _DeviceProperty::offset) = value;
-		}
-		
-		/**
-		 * @brief Sets a custom property for this device
-		 * @tparam T The type of value to store
-		 * @param name The name of the property
-		 * @param value The value to store. If a pointer is stored, deleting the pointer elsewhere could cause problems
-		 */
-		template <typename T>
-		void SetProperty(const std::string &name, T value) {
-#if SIMPLEAGENT_IGNORE_CASE
-			// Need to use the iterator
-			for (auto it = custom_properties.begin(); it != custom_properties.end(); ++it) {
-				if ( CompareAndIgnoreCase(name, it->first) ) {
-					// Delete the old value
-					delete it->second;
-					// Remove the value from the table, since the case could be different
-					custom_properties.erase(it);
-					
-					break;
-				}
-			}
-			
-			// Store the custom property
-			custom_properties[name] = new CustomProperty(value);
-#else
-			// Check if the property is already set
-			if ( custom_properties.find(name) != custom_properties.end() ) {
-				// Delete the old value
-				delete custom_properties[name];
-			}
-			
-			// Store the custom property
-			custom_properties[name] = new CustomProperty(value);
-#endif
-		}
-		
-		/**
-		 * @brief Retrieves the value of a COSMOS property
-		 * @tparam _DeviceProperty The device property to get (e.g. TemperatureSensor::Temperature)
-		 * @return The value of the property, or a default-constructed value if the property doesn't exist
-		 */
-		template <typename _DeviceProperty>
-		typename _DeviceProperty::ValueType GetProperty() {
-			
-			// Check if the property exists
-			if ( !PropertyExists<_DeviceProperty>() ) {
-				printf("Attempted to retrieve property '%s', which does not exist\n", _DeviceProperty::name);
-				
-				// Return a default-constructed value
-				return typename _DeviceProperty::ValueType();
-				
-				//throw NonExistentPropertyException(_DeviceProperty::name);
-			}
-			else {
-				// Get the property value using the DeviceProperty offset
-				// Beware: pointer magic ahead!
-				return *(typename _DeviceProperty::ValueType*)((void*)&agent->cinfo->device[cindex] + _DeviceProperty::offset);
-			}
-		}
-		
-		/**
-		 * @brief Retrieves the value of a custom property
-		 * @tparam T The storage type of the property. This NEEDS to match the one in SetProperty() to avoid type issues
-		 * @param name The name of the property
-		 * @return The property value
-		 */
-		template <typename T>
-		T GetProperty(const std::string &name) {
-#if SIMPLEAGENT_IGNORE_CASE
-			for (auto property_pair : custom_properties) {
-				if ( CompareAndIgnoreCase(name, property_pair.first) ) {
-					
-					// Make sure the given type is correct
-					if ( !property_pair.second->TypeMatches<T>() )
-						throw TypeMismatchException("The type supplied does not match the type stored");
-					
-					// Return the value supplied
-					return *(T*)property_pair.second->value_pointer;
-					
-				}
-			}
-			
-			// Return a default-constructed value
-			return T();
-#else
-			if ( !PropertyExists<T>(name) ) {
-				printf("Attempted to retrieve property '%s', which does not exist\n", name.c_str());
-				//throw NonExistentPropertyException(name);
-				return T();
-			}
-			else {
-				
-				// Look up the custom property
-				CustomProperty *property = custom_properties[name];
-				
-				// Make sure the given type is correct
-				if ( !property->TypeMatches<T>() )
-					throw TypeMismatchException("The type supplied does not match the type stored");
-				
-				// Return the value supplied
-				return *(T*)property->value_pointer;
-			}
-#endif
-		}
-		
-		
-		std::string GetPropertyStringByName(const std::string &cosmos_name) {
-			std::string name_without_dindex;
-			
-			// Search the COSMOS properties
-			for (auto device_pair : cosmos_properties) {
-				// Get the name without the device index
-				name_without_dindex = device_pair.second.cosmos_name.substr(0, device_pair.second.cosmos_name.length() - 4);
-				if ( name_without_dindex == cosmos_name ) {
-					return device_pair.second.value_string;
-				}
-			}
-			
-			return "";
-		}
-		
-		//===============================================================
-		//============================ DEBUG ============================
-		//===============================================================
-		
-		/**
-		 * @brief (Internal) Prints a list of stored properties for this device
-		 * @param print_all If true, even non-posted and custom properties are listed
-		 */
-		void DebugPrint(bool print_all = false) const;
-		
-		/**
-		 * @brief (Internal) Adds a list of stored properties for this device to a given stringstream
-		 * @param ss The string stream to write to
-		 * @param print_all If true, even non-posted and custom properties are listed
-		 */
-		void GetDebugString(std::stringstream &ss, bool print_all = false) const;
-		
 		
 	protected:
-		//! The agent this device belongs to
 		Agent *agent;
-		//! The COSMOS device type
-		DeviceType type;
-		//! The name of this device
-		std::string device_name;
-		//! COSMOS piece index
-		int pindex;
-		//! COSMOS component index
 		int cindex;
-		//! COSMOS device index
 		int dindex;
-		//! A table of custom properties added to this device
-		std::unordered_map<std::string, CustomProperty*> custom_properties;
-		//! A table of COSMOS properties added to this device
-		std::unordered_map<PropertyID, COSMOSProperty> cosmos_properties;
+		std::string device_name;
+		std::string cosmos_device_name;
+		std::unordered_map<PropertyID, PostedProperty> cosmos_properties;
+		std::unordered_map<std::string, CustomProperty> custom_properties;
 		
-		
-		/**
-		 * @brief Gets the COSMOS property name of a COSMOS property (e.g. device_tsen_temp_000)
-		 * @tparam The device property (e.g. TemperatureSensor::Temperature)
-		 * @return The COSMOS property name
-		 */
-		template <typename DeviceProperty>
-		std::string GetCOSMOSPropertyName() {
+		std::string GetCOSMOSPropertyName(const std::string & cosmos_property_name) {
 			std::stringstream ss;
-			
-			// Format the COSMOS name as "device_deviceName_propertyName_deviceIndex"
-			//                            [^^^^^^^^^^^^^^^] DeviceProperty::key
-			ss << DeviceProperty::key << "_" << std::setw(3) << std::setfill('0') << dindex;
+			ss << "device_" << cosmos_device_name << "_" << cosmos_property_name << "_" << std::setw(3) << std::setfill('0') << dindex;
 			return ss.str();
 		}
+	};
+	
+	template<typename DeviceStrucType, DeviceType type_>
+	struct DeviceImplBase {
+		using __DeviceStruc = DeviceStrucType;
+		static constexpr DeviceType type = type_;
+	};
+	
+	
+	//===============================================================
+	//=================== Device Implementations ====================
+	//===============================================================
+	
+	
+	class TemperatureSensor : public Device, public DeviceImplBase<tsenstruc, DeviceType::TSEN> {
+	public:
+		TemperatureSensor(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "tsen"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex)
+		{}
+		virtual ~TemperatureSensor() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+	};
+	
+	class Heater : public Device, public DeviceImplBase<htrstruc, DeviceType::HTR> {
+	public:
+		Heater(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "htr"),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex)
+		{}
+		virtual ~Heater() {}
+		
+		//! The timestamp for this device
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+	};
+	
+	
+	class SunSensor : public Device, public DeviceImplBase<ssenstruc, DeviceType::SSEN> {
+	public:
+		SunSensor(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "ssen"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex)
+		{}
+		virtual ~SunSensor() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+	};
+	
+	class IMU : public Device, public DeviceImplBase<imustruc, DeviceType::IMU> {
+	public:
+		IMU(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "imu"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex),
+			
+			magnetic_field(agent, cindex),
+			acceleration(agent, cindex),
+			angular_velocity(agent, cindex)
+		{}
+		virtual ~IMU() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+		
+		_AddProperty(magnetic_field, mag);
+		_AddProperty(acceleration, accel);
+		_AddProperty(angular_velocity, omega);
+	};
+	
+	class GPS : public Device, public DeviceImplBase<gpsstruc, DeviceType::GPS> {
+	public:
+		GPS(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "gps"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex),
+			
+			satellites_used(agent, cindex),
+			location(agent, cindex),
+			velocity(agent, cindex)
+		{}
+		virtual ~GPS() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+		
+		_AddProperty(satellites_used, sats_used);
+		_AddProperty(location, geods);
+		_AddProperty(velocity, geocv);
+	};
+	
+	
+	class Battery : public Device, public DeviceImplBase<battstruc, DeviceType::BATT> {
+	public:
+		Battery(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "batt"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex),
+			
+			percentage(agent, cindex),
+			capacity(agent, cindex),
+			charge(agent, cindex),
+			efficiency(agent, cindex),
+			time_remaining(agent, cindex)
+		{}
+		virtual ~Battery() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+		
+		_AddProperty(percentage, percentage);
+		_AddProperty(capacity, capacity);
+		_AddProperty(charge, charge);
+		_AddProperty(efficiency, efficiency);
+		_AddProperty(time_remaining, time_remaining);
+	};
+	
+	class RadioTransceiver : public Device, public DeviceImplBase<tcvstruc, DeviceType::TCV> {
+	public:
+		RadioTransceiver(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "tcv"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex),
+			
+			frequency(agent, cindex),
+			max_frequency(agent, cindex),
+			min_frequency(agent, cindex),
+			power_in(agent, cindex),
+			power_out(agent, cindex),
+			max_power(agent, cindex),
+			bandwidth(agent, cindex),
+			good_packet_count(agent, cindex),
+			bad_packet_count(agent, cindex)
+		{}
+		virtual ~RadioTransceiver() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+		
+		_AddProperty(frequency, freq);
+		_AddProperty(max_frequency, maxfreq);
+		_AddProperty(min_frequency, minfreq);
+		_AddProperty(power_in, powerin);
+		_AddProperty(power_out, powerout);
+		_AddProperty(max_power, maxpower);
+		_AddProperty(bandwidth, band);
+		_AddProperty(good_packet_count, goodcnt);
+		_AddProperty(bad_packet_count, badcnt);
+	};
+	
+	class CPU : public Device, public DeviceImplBase<cpustruc, DeviceType::CPU> {
+	public:
+		CPU(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "cpu"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex),
+			
+			up_time(agent, cindex),
+			load(agent, cindex),
+			max_load(agent, cindex),
+			max_memory(agent, cindex),
+			memory_usage(agent, cindex),
+			boot_count(agent, cindex)
+		{}
+		virtual ~CPU() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+		
+		_AddProperty(up_time, uptime);
+		_AddProperty(load, load);
+		_AddProperty(max_load, maxload);
+		_AddProperty(max_memory, maxgib);
+		_AddProperty(memory_usage, gib);
+		_AddProperty(boot_count, boot_count);
+	};
+	
+	class Camera : public Device, public DeviceImplBase<camstruc, DeviceType::CAM> {
+	public:
+		Camera(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "cam"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex),
+			
+			pixel_width(agent, cindex),
+			pixel_height(agent, cindex),
+			width(agent, cindex),
+			height(agent, cindex),
+			focal_length(agent, cindex)
+		{}
+		virtual ~Camera() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+		_AddProperty(pixel_width, pwidth);
+		_AddProperty(pixel_height, pheight);
+		_AddProperty(width, width);
+		_AddProperty(height, height);
+		_AddProperty(focal_length, flength);
+	};
+	
+	class Switch : public Device, public DeviceImplBase<swchstruc, DeviceType::SWCH> {
+	public:
+		Switch(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "swch"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex)
+		{}
+		virtual ~Switch() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
+	};
+	
+	
+	class CustomDevice : public Device, public DeviceImplBase<ploadstruc, DeviceType::PLOAD> {
+	public:
+		CustomDevice(Agent *agent, int cindex, int dindex) :
+			Device(agent, cindex, dindex, "pload"),
+			temperature(agent, cindex),
+			utc(agent, cindex),
+			voltage(agent, cindex),
+			current(agent, cindex),
+			power(agent, cindex),
+			enabled(agent, cindex)
+		{}
+		virtual ~CustomDevice() {}
+		
+		_AddProperty(temperature, temp);
+		_AddProperty(utc, utc);
+		_AddProperty(voltage, volt);
+		_AddProperty(current, amp);
+		_AddProperty(power, power);
+		_AddProperty(enabled, enabled);
 	};
 	
 }

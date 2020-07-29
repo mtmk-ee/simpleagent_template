@@ -8,454 +8,253 @@
 #include "support/jsonclass.h"
 #include "utility/Types.h"
 
+
+//! Use this to add support for a new property
+#define _RegisterProperty(simple_name_, device_struc, member)\
+	template<> struct PropertyMeta<device_struc, offsetof(device_struc, member)> {\
+		using ValueType = decltype(device_struc::member);\
+		using MemberType = decltype(device_struc::member);\
+		static constexpr const char *cosmos_name = #member;\
+		static constexpr const char *simple_name = simple_name_;\
+	}
+
+//! Use this to add support for a new property that uses a different type than the one
+//! defined in the given device struc
+#define _RegisterPropertyWithType(type, simple_name_, device_struc, member)\
+	template<> struct PropertyMeta<device_struc, offsetof(device_struc, member)> {\
+		using ValueType = type;\
+		using MemberType = decltype(device_struc::member);\
+		static constexpr const char *cosmos_name = #member;\
+		static constexpr const char *simple_name = simple_name_;\
+	}
+
+//! Use this to add a property to a device implementation
+//! (it's just for convenience)
+#define _AddProperty(name, member)\
+	Property<__DeviceStruc, offsetof(__DeviceStruc, member)> name
+
+
 namespace cubesat {
 	
-	
 	/**
-	 * @brief A device property. Extend this struct inside of
-	 * a Device<T> struct to add support for more COSMOS properties.
-	 * @tparam T The value type this property represents (e.g. float for temperatures)
-	 * @tparam _offset The byte offset of the property to the beginning of the
-	 * corresponding device struct. See _Device<DeviceType::CPU>::UTC for an example
+	 * @brief Holds information about a COSMOS property
+	 * @tparam device_struc The COSMOS device struc this property belongs to
+	 * @tparam offset The offset in bytes of the property variable to the beginning of the device_struc
 	 */
+	template <typename device_struc, size_t offset>
+	struct PropertyMeta {};
+	
+	template <typename device_struc, size_t offset>
+	struct Property {
+	public:
+		//! The PropertyMeta type for this property
+		using MetaData = PropertyMeta<device_struc, offset>;
+		//! The actual member type used in the device_struc declaration
+		using MemberType = typename PropertyMeta<device_struc, offset>::MemberType;
+		//! The value type expected (may or may not be the same as the MemberType)
+		using ValueType = typename PropertyMeta<device_struc, offset>::ValueType;
+		
+		
+		Property(Agent *agent, int cindex) : agent(agent), cindex(cindex) {
+			
+		}
+		
+		//! Stores the given value in the COSMOS namespace
+		inline Property& operator =(ValueType value) {
+			// Retrieve the value pointer with its actual type
+			MemberType *member_value = (MemberType*)((char*)&agent->cinfo->device[cindex] + offset);
+			
+			// Try to store a casted version of the type
+			*member_value = (MemberType)value;
+			
+			return *this;
+		}
+		//! Retrieves the value in the COSMOS namespace
+		inline operator ValueType() {
+			// Retrieve the value with its actual type
+			MemberType *member_value = (MemberType*)((char*)&agent->cinfo->device[cindex] + offset);
+			
+			// Return the value with a possibly casted type
+			return (ValueType)*member_value;
+		}
+		
+	private:
+		//! The agent used to access the COSMOS namespace
+		Agent *agent;
+		//! The component index of the device this property belongs to
+		int cindex;
+	};
+	
+	
+	
+	
+	
+	
+	//===============================================================
+	//==================== PROPERTY DEFINITIONS =====================
+	//===============================================================
+	
+	//============ Temperature Sensor ============
+	_RegisterProperty("Temperature", tsenstruc, temp);
+	_RegisterProperty("Enabled", tsenstruc, enabled);
+	_RegisterProperty("Voltage", tsenstruc, volt);
+	_RegisterProperty("Current", tsenstruc, amp);
+	_RegisterProperty("Power", tsenstruc, power);
+	_RegisterProperty("UTC", tsenstruc, utc);
+	_RegisterProperty("Energy", tsenstruc, energy);
+	
+	//============ Heater ============
+	_RegisterProperty("Temperature", htrstruc, temp);
+	_RegisterProperty("Enabled", htrstruc, enabled);
+	_RegisterProperty("Voltage", htrstruc, volt);
+	_RegisterProperty("Current", htrstruc, amp);
+	_RegisterProperty("Power", htrstruc, power);
+	_RegisterProperty("UTC", htrstruc, utc);
+	
+	//============ Sun Sensor ============
+	_RegisterProperty("Temperature", ssenstruc, temp);
+	_RegisterProperty("Enabled", ssenstruc, enabled);
+	_RegisterProperty("Voltage", ssenstruc, volt);
+	_RegisterProperty("Current", ssenstruc, amp);
+	_RegisterProperty("Power", ssenstruc, power);
+	_RegisterProperty("UTC", ssenstruc, utc);
+	
+	//============ IMU ============
+	_RegisterProperty("Temperature", imustruc, temp);
+	_RegisterProperty("Enabled", imustruc, enabled);
+	_RegisterProperty("Voltage", imustruc, volt);
+	_RegisterProperty("Current", imustruc, amp);
+	_RegisterProperty("Power", imustruc, power);
+	_RegisterProperty("UTC", imustruc, utc);
+	_RegisterPropertyWithType(Vec3, "Magnetic Field", imustruc, mag);
+	_RegisterPropertyWithType(Vec3, "Acceleration", imustruc, accel);
+	_RegisterPropertyWithType(Vec3, "Angular Acceleration", imustruc, omega);
+	
+	//============ GPS ============
+	_RegisterProperty("Temperature", gpsstruc, temp);
+	_RegisterProperty("Enabled", gpsstruc, enabled);
+	_RegisterProperty("Voltage", gpsstruc, volt);
+	_RegisterProperty("Current", gpsstruc, amp);
+	_RegisterProperty("Power", gpsstruc, power);
+	_RegisterProperty("UTC", gpsstruc, utc);
+	_RegisterProperty("Satellites Used", gpsstruc, sats_used);
+	_RegisterPropertyWithType(Location, "Location", gpsstruc, geods);
+	_RegisterPropertyWithType(Vec3, "Velocity", gpsstruc, geocv);
+	
+	//============ Battery ============
+	_RegisterProperty("Temperature", battstruc, temp);
+	_RegisterProperty("Enabled", battstruc, enabled);
+	_RegisterProperty("Voltage", battstruc, volt);
+	_RegisterProperty("Current", battstruc, amp);
+	_RegisterProperty("Power", battstruc, power);
+	_RegisterProperty("UTC", battstruc, utc);
+	_RegisterProperty("Percent", battstruc, percentage);
+	_RegisterProperty("Capacity", battstruc, capacity);
+	_RegisterProperty("Charge", battstruc, charge);
+	_RegisterProperty("Efficiency", battstruc, efficiency);
+	_RegisterProperty("Time Remaining", battstruc, time_remaining);
+	
+	//============ Radio Transceiver ============
+	_RegisterProperty("Temperature", tcvstruc, temp);
+	_RegisterProperty("Enabled", tcvstruc, enabled);
+	_RegisterProperty("Voltage", tcvstruc, volt);
+	_RegisterProperty("Current", tcvstruc, amp);
+	_RegisterProperty("Power", tcvstruc, power);
+	_RegisterProperty("UTC", tcvstruc, utc);
+	_RegisterProperty("Frequency", tcvstruc, freq);
+	_RegisterProperty("Max Frequency", tcvstruc, maxfreq);
+	_RegisterProperty("Min Frequency", tcvstruc, minfreq);
+	_RegisterProperty("Power In", tcvstruc, powerin);
+	_RegisterProperty("Power Out", tcvstruc, powerout);
+	_RegisterProperty("Max Power", tcvstruc, maxpower);
+	_RegisterProperty("Bandwidth", tcvstruc, band);
+	_RegisterProperty("Good Packet Count", tcvstruc, goodcnt);
+	_RegisterProperty("Bad Packet Count", tcvstruc, badcnt);
+	
+	//============ CPU ============
+	_RegisterProperty("Temperature", cpustruc, temp);
+	_RegisterProperty("Enabled", cpustruc, enabled);
+	_RegisterProperty("Voltage", cpustruc, volt);
+	_RegisterProperty("Current", cpustruc, amp);
+	_RegisterProperty("Power", cpustruc, power);
+	_RegisterProperty("UTC", cpustruc, utc);
+	_RegisterProperty("Up Time", cpustruc, uptime);
+	_RegisterProperty("Load", cpustruc, load);
+	_RegisterProperty("Max Load", cpustruc, maxload);
+	_RegisterProperty("Max Memory", cpustruc, maxgib);
+	_RegisterProperty("Memory Use", cpustruc, gib);
+	_RegisterProperty("Boot Count", cpustruc, boot_count);
+	
+	//============ Camera ============
+	_RegisterProperty("Temperature", camstruc, temp);
+	_RegisterProperty("Enabled", camstruc, enabled);
+	_RegisterProperty("Voltage", camstruc, volt);
+	_RegisterProperty("Current", camstruc, amp);
+	_RegisterProperty("Power", camstruc, power);
+	_RegisterProperty("UTC", camstruc, utc);
+	_RegisterProperty("Pixel Width", camstruc, pwidth);
+	_RegisterProperty("Pixel Height", camstruc, pheight);
+	_RegisterProperty("Width", camstruc, width);
+	_RegisterProperty("Height", camstruc, height);
+	_RegisterProperty("Focal Length", camstruc, flength);
+	
+	//============ Switch ============
+	_RegisterProperty("Temperature", swchstruc, temp);
+	_RegisterProperty("Enabled", swchstruc, enabled);
+	_RegisterProperty("Voltage", swchstruc, volt);
+	_RegisterProperty("Current", swchstruc, amp);
+	_RegisterProperty("Power", swchstruc, power);
+	_RegisterProperty("UTC", swchstruc, utc);
+	
+	//============ Custom Device ============
+	_RegisterProperty("Temperature", ploadstruc, temp);
+	_RegisterProperty("Enabled", ploadstruc, enabled);
+	_RegisterProperty("Voltage", ploadstruc, volt);
+	_RegisterProperty("Current", ploadstruc, amp);
+	_RegisterProperty("Power", ploadstruc, power);
+	_RegisterProperty("UTC", ploadstruc, utc);
+	
+	//===============================================================
+	//====================== NODE PROPERTIES ========================
+	//===============================================================
+	
 	template <typename T, size_t _offset>
-	struct DeviceProperty {
+	struct NodeProperty {
 		//! The value type
 		using ValueType = T;
 		//! The byte offset to the property member
 		static constexpr size_t offset = _offset;
 	};
 	
-	/**
-	 * @brief Default device type. Specialize this struct
-	 * to add different types of devices
-	 * @tparam T The type of COSMOS device (e.g. DeviceType::TSEN)
-	 */
-	template <DeviceType T>
-	struct _Device {};
-	
-	//===============================================================
-	//=================== DEVICE IMPLEMENTATIONS ====================
-	//===============================================================
-	
-	template <>
-	struct _Device<DeviceType::CPU> {
-		static constexpr DeviceType type = DeviceType::CPU;
-		static constexpr const char *name = "CPU";
-		
-		struct UTC : DeviceProperty<double, offsetof(cpustruc, utc)> {
-			static constexpr auto key = "device_cpu_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(cpustruc, volt)> {
-			static constexpr auto key = "device_cpu_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(cpustruc, amp)> {
-			static constexpr auto key = "device_cpu_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct MemoryUsed : DeviceProperty<float, offsetof(cpustruc, gib)> {
-			static constexpr auto key = "device_cpu_gib";
-			static constexpr const char *name = "Memory Used";
-		};
-		struct MaxMemory : DeviceProperty<float, offsetof(cpustruc, maxgib)> {
-			static constexpr auto key = "device_cpu_maxgib";
-			static constexpr const char *name = "Max Memory";
-		};
-		struct Load : DeviceProperty<float, offsetof(cpustruc, load)> {
-			static constexpr auto key = "device_cpu_load";
-			static constexpr const char *name = "Load";
-		};
-		struct BootCount : DeviceProperty<uint32_t, offsetof(cpustruc, boot_count)> {
-			static constexpr auto key = "device_cpu_boot_count";
-			static constexpr const char *name = "Boot Count";
-		};
-		struct UpTime : DeviceProperty<uint32_t, offsetof(cpustruc, uptime)> {
-			static constexpr auto key = "device_cpu_uptime";
-			static constexpr const char *name = "Up Time";
-		};
-		struct Temperature : DeviceProperty<float, offsetof(cpustruc, temp)> {
-			static constexpr auto key = "device_cpu_temp";
-			static constexpr const char *name = "Temperature";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::BATT> {
-		static constexpr DeviceType type = DeviceType::BATT;
-		static constexpr const char *name = "Battery";
-		
-		struct UTC : DeviceProperty<double, offsetof(battstruc, utc)> {
-			static constexpr auto key = "device_batt_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(battstruc, volt)> {
-			static constexpr auto key = "device_batt_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(battstruc, amp)> {
-			static constexpr auto key = "device_batt_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Percentage : DeviceProperty<float, offsetof(battstruc, percentage)> {
-			static constexpr auto key = "device_batt_percentage";
-			static constexpr const char *name = "Percentage";
-		};
-		struct Capacity : DeviceProperty<float, offsetof(battstruc, percentage)> {
-			static constexpr auto key = "device_batt_capacity"; // node_battcap?
-			static constexpr const char *name = "Capacity";
-		};
-		struct Efficiency : DeviceProperty<float, offsetof(battstruc, percentage)> {
-			static constexpr auto key = "device_batt_efficiency";
-			static constexpr const char *name = "Efficiency";
-		};
-		struct Temperature : DeviceProperty<float, offsetof(battstruc, temp)> {
-			static constexpr auto key = "device_batt_temp";
-			static constexpr const char *name = "Temperature";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::SSEN> {
-		static constexpr DeviceType type = DeviceType::SSEN;
-		static constexpr const char *name = "Sun Sensor";
-		
-		struct UTC : DeviceProperty<double, offsetof(ssenstruc, utc)> {
-			static constexpr auto key = "device_ssen_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(ssenstruc, volt)> {
-			static constexpr auto key = "device_ssen_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(ssenstruc, amp)> {
-			static constexpr auto key = "device_ssen_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Temperature : DeviceProperty<float, offsetof(ssenstruc, temp)> {
-			static constexpr auto key = "device_ssen_temp";
-			static constexpr const char *name = "Temperature";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::TSEN> {
-		static constexpr DeviceType type = DeviceType::TSEN;
-		static constexpr const char *name = "Temperature Sensor";
-		
-		struct UTC : DeviceProperty<double, offsetof(tsenstruc, utc)> {
-			static constexpr auto key = "device_tsen_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(tsenstruc, volt)> {
-			static constexpr auto key = "device_tsen_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(tsenstruc, amp)> {
-			static constexpr auto key = "device_tsen_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Temperature : DeviceProperty<float, offsetof(tsenstruc, temp)> {
-			static constexpr auto key = "device_tsen_temp";
-			static constexpr const char *name = "Temperature";
-		};
-		struct Enabled : DeviceProperty<bool, offsetof(tsenstruc, enabled)> {
-			static constexpr auto key = "device_tsen_enabled";
-			static constexpr const char *name = "Enabled";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::IMU> {
-		static constexpr DeviceType type = DeviceType::IMU;
-		static constexpr const char *name = "IMU";
-		
-		struct UTC : DeviceProperty<double, offsetof(imustruc, utc)> {
-			static constexpr auto key = "device_imu_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(imustruc, volt)> {
-			static constexpr auto key = "device_imu_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(imustruc, amp)> {
-			static constexpr auto key = "device_imu_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Acceleration : DeviceProperty<rvector, offsetof(imustruc, accel)> {
-			static constexpr auto key = "device_imu_accel";
-			static constexpr const char *name = "Acceleration";
-		};
-		struct Magnetometer : DeviceProperty<rvector, offsetof(imustruc, mag)> {
-			static constexpr auto key = "device_imu_mag";
-			static constexpr const char *name = "Magnetometer";
-		};
-		struct Gyroscope : DeviceProperty<rvector, offsetof(imustruc, omega)> {
-			static constexpr auto key = "device_imu_omega";
-			static constexpr const char *name = "Gyroscope";
-		};
-		struct Temperature : DeviceProperty<float, offsetof(imustruc, temp)> {
-			static constexpr auto key = "device_imu_temp";
-			static constexpr const char *name = "Temperature";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::GPS> {
-		static constexpr DeviceType type = DeviceType::GPS;
-		static constexpr const char *name = "GPS";
-		
-		struct UTC : DeviceProperty<double, offsetof(gpsstruc, utc)> {
-			static constexpr auto key = "device_gps_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(gpsstruc, volt)> {
-			static constexpr auto key = "device_gps_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(gpsstruc, amp)> {
-			static constexpr auto key = "device_gps_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Location : DeviceProperty<gvector, offsetof(gpsstruc, geods)> {
-			static constexpr auto key = "device_gps_geods";
-			static constexpr const char *name = "Location";
-		};
-		struct SatellitesUsed : DeviceProperty<uint16_t, offsetof(gpsstruc, sats_used)> {
-			static constexpr auto key = "device_gps_sats_used";
-			static constexpr const char *name = "Satellites Used";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::TCV> {
-		static constexpr DeviceType type = DeviceType::TCV;
-		static constexpr const char *name = "Radio Transceiver";
-		
-		struct UTC : DeviceProperty<double, offsetof(tcvstruc, utc)> {
-			static constexpr auto key = "device_tcv_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(tcvstruc, volt)> {
-			static constexpr auto key = "device_tcv_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(tcvstruc, amp)> {
-			static constexpr auto key = "device_tcv_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Enabled : DeviceProperty<bool, offsetof(tcvstruc, enabled)> {
-			static constexpr auto key = "device_tcv_enabled";
-			static constexpr const char *name = "Enabled";
-		};
-		struct Band : DeviceProperty<float, offsetof(tcvstruc, band)> {
-			static constexpr auto key = "device_tcv_band";
-			static constexpr const char *name = "Band";
-		};
-		struct Frequency : DeviceProperty<float, offsetof(tcvstruc, freq)> {
-			static constexpr auto key = "device_tcv_freq";
-			static constexpr const char *name = "Frequency";
-		};
-		struct MaxFrequency : DeviceProperty<float, offsetof(tcvstruc, maxfreq)> {
-			static constexpr auto key = "device_tcv_maxfreq";
-			static constexpr const char *name = "Max Frequency";
-		};
-		struct MinFrequency : DeviceProperty<float, offsetof(tcvstruc, minfreq)> {
-			static constexpr auto key = "device_tcv_minfreq";
-			static constexpr const char *name = "Min Frequency";
-		};
-		struct PowerIn : DeviceProperty<float, offsetof(tcvstruc, powerin)> {
-			static constexpr auto key = "device_tcv_powerin";
-			static constexpr const char *name = "Power In";
-		};
-		struct PowerOut : DeviceProperty<float, offsetof(tcvstruc, powerout)> {
-			static constexpr auto key = "device_tcv_powerout";
-			static constexpr const char *name = "Power Out";
-		};
-		struct MaxPower : DeviceProperty<float, offsetof(tcvstruc, maxpower)> {
-			static constexpr auto key = "device_tcv_maxpower";
-			static constexpr const char *name = "Max Power";
-		};
-		struct RSSI : DeviceProperty<uint16_t, offsetof(tcvstruc, rssi)> {
-			static constexpr auto key = "device_tcv_rssi";
-			static constexpr const char *name = "RSSI";
-		};
-		struct BadPacketCount : DeviceProperty<uint32_t, offsetof(tcvstruc, badcnt)> {
-			static constexpr auto key = "device_tcv_badcnt";
-			static constexpr const char *name = "Bad Packet Count";
-		};
-		struct GoodPacketCount : DeviceProperty<uint32_t, offsetof(tcvstruc, goodcnt)> {
-			static constexpr auto key = "device_tcv_goodcnt";
-			static constexpr const char *name = "Good Packet Count";
-		};
-		struct PacketSize : DeviceProperty<uint16_t, offsetof(tcvstruc, pktsize)> {
-			static constexpr auto key = "device_tcv_pktsize";
-			static constexpr const char *name = "Packet Size";
-		};
-		struct OperatingMode : DeviceProperty<uint16_t, offsetof(tcvstruc, opmode)> {
-			static constexpr auto key = "device_tcv_opmode";
-			static constexpr const char *name = "Operating Mode";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::HTR> {
-		static constexpr DeviceType type = DeviceType::HTR;
-		static constexpr const char *name = "Heater";
-		
-		struct UTC : DeviceProperty<double, offsetof(htrstruc, utc)> {
-			static constexpr auto key = "device_htr_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(htrstruc, volt)> {
-			static constexpr auto key = "device_htr_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(htrstruc, amp)> {
-			static constexpr auto key = "device_htr_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Enabled : DeviceProperty<bool, offsetof(htrstruc, enabled)> {
-			static constexpr auto key = "device_htr_enabled";
-			static constexpr const char *name = "Enabled";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::SWCH> {
-		static constexpr DeviceType type = DeviceType::SWCH;
-		static constexpr const char *name = "Switch";
-		
-		struct UTC : DeviceProperty<double, offsetof(swchstruc, utc)> {
-			static constexpr auto key = "device_swch_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(swchstruc, volt)> {
-			static constexpr auto key = "device_swch_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(swchstruc, amp)> {
-			static constexpr auto key = "device_swch_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Enabled : DeviceProperty<bool, offsetof(swchstruc, enabled)> {
-			static constexpr auto key = "device_swch_enabled";
-			static constexpr const char *name = "Enabled";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::CAM> {
-		static constexpr DeviceType type = DeviceType::CAM;
-		static constexpr const char *name = "Camera";
-		
-		struct UTC : DeviceProperty<double, offsetof(camstruc, utc)> {
-			static constexpr auto key = "device_cam_utc";
-			static constexpr const char *name = "UTC";
-		};
-		struct Voltage : DeviceProperty<float, offsetof(camstruc, volt)> {
-			static constexpr auto key = "device_cam_volt";
-			static constexpr const char *name = "Voltage";
-		};
-		struct Current : DeviceProperty<float, offsetof(camstruc, amp)> {
-			static constexpr auto key = "device_cam_amp";
-			static constexpr const char *name = "Current";
-		};
-		struct Enabled : DeviceProperty<bool, offsetof(camstruc, enabled)> {
-			static constexpr auto key = "device_cam_enabled";
-			static constexpr const char *name = "Enabled";
-		};
-		struct PixelWidth : DeviceProperty<uint16_t, offsetof(camstruc, pwidth)> {
-			static constexpr auto key = "device_cam_pwidth";
-			static constexpr const char *name = "Pixel Width";
-		};
-		struct PixelHeight : DeviceProperty<uint16_t, offsetof(camstruc, pheight)> {
-			static constexpr auto key = "device_cam_pheight";
-			static constexpr const char *name = "Pixel Height";
-		};
-		struct Width : DeviceProperty<float, offsetof(camstruc, width)> {
-			static constexpr auto key = "device_cam_width";
-			static constexpr const char *name = "Width";
-		};
-		struct Height : DeviceProperty<float, offsetof(camstruc, height)> {
-			static constexpr auto key = "device_cam_height";
-			static constexpr const char *name = "Height";
-		};
-		struct FocalLength : DeviceProperty<float, offsetof(camstruc, flength)> {
-			static constexpr auto key = "device_cam_flength";
-			static constexpr const char *name = "Focal Length";
-		};
-	};
-	
-	template <>
-	struct _Device<DeviceType::PLOAD> {
-		static constexpr DeviceType type = DeviceType::PLOAD;
-		static constexpr const char *name = "Custom Device";
-		
-		struct UTC : DeviceProperty<double, offsetof(ploadstruc, utc)> {
-			static constexpr auto key = "device_pload_utc";
-			static constexpr const char *name = "UTC";
-		};
-	};
-	
-	
-	//! A non-COSMOS device
-	using CustomDevice = _Device<DeviceType::PLOAD>;
-	//! A CPU device
-	using CPU = _Device<DeviceType::CPU>;
-	//! A battery device
-	using Battery = _Device<DeviceType::BATT>;
-	//! A sun sensor device
-	using SunSensor = _Device<DeviceType::SSEN>;
-	//! A temperature sensor device
-	using TemperatureSensor = _Device<DeviceType::TSEN>;
-	//! An IMU device
-	using IMU = _Device<DeviceType::IMU>;
-	//! A GPS device
-	using GPS = _Device<DeviceType::GPS>;
-	//! A heater device
-	using Heater = _Device<DeviceType::HTR>;
-	//! A radio transceiver device
-	using Transceiver = _Device<DeviceType::TCV>;
-	//! An electrical switch device
-	using Switch = _Device<DeviceType::SWCH>;
-	//! A camera device
-	using Camera = _Device<DeviceType::CAM>;
-	
-	
-	//===============================================================
-	//====================== NODE PROPERTIES ========================
-	//===============================================================
-	
-	template <typename ValueType, size_t Offset>
-	using NodeProperty = DeviceProperty<ValueType, Offset>;
-	
 	//! A namespace holding all available node properties
 	namespace Node {
-		struct UTC : DeviceProperty<double, offsetof(nodestruc, utc)> {
+		struct UTC : NodeProperty<double, offsetof(nodestruc, utc)> {
 			static constexpr auto key = "node_utc";
 			static constexpr const char *name = "UTC";
 		};
-		struct MomentOfInertia : DeviceProperty<rvector, offsetof(nodestruc, moi)> {
+		struct MomentOfInertia : NodeProperty<rvector, offsetof(nodestruc, moi)> {
 			static constexpr auto key = "node_moi";
 			static constexpr const char *name = "Moment of Inertia";
 		};
-		struct Mass : DeviceProperty<float, offsetof(nodestruc, mass)> {
+		struct Mass : NodeProperty<float, offsetof(nodestruc, mass)> {
 			static constexpr auto key = "node_mass";
 			static constexpr const char *name = "Mass";
 		};
-		struct PowerGeneration : DeviceProperty<float, offsetof(nodestruc, powgen)> {
+		struct PowerGeneration : NodeProperty<float, offsetof(nodestruc, powgen)> {
 			static constexpr auto key = "node_powgen";
 			static constexpr const char *name = "Power Generation";
 		};
-		struct PowerUse : DeviceProperty<float, offsetof(nodestruc, powuse)> {
+		struct PowerUse : NodeProperty<float, offsetof(nodestruc, powuse)> {
 			static constexpr auto key = "node_powuse";
 			static constexpr const char *name = "Power Use";
 		};
-		struct BatteryCapacity : DeviceProperty<float, offsetof(nodestruc, battcap)> {
+		struct BatteryCapacity : NodeProperty<float, offsetof(nodestruc, battcap)> {
 			static constexpr auto key = "node_battcap";
 			static constexpr const char *name = "Battery Capacity";
+		};
+		struct BatteryCharge : NodeProperty<float, offsetof(nodestruc, battlev)> {
+			static constexpr auto key = "node_battlev";
+			static constexpr const char *name = "Battery Charge";
 		};
 	}
 	
