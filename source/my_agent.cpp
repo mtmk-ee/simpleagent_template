@@ -4,10 +4,17 @@
 using namespace std;
 using namespace cubesat;
 
-//! A request which returns a friendly greeting
-string Request_SayHi();
-//! A request which returns whatever argument the user gives it
-string Request_Echo(vector<string> args);
+//! An agent request which returns whatever argument the user gives it
+double Request_Double(double arg);
+
+//! An agent request which returns whatever we put in. The "CapturedInput"
+//! type allows the user to put in any string they wish (including spaces)
+std::string Request_Repeat(CapturedInput input);
+
+//! A device request attached to a temperature sensor. Returns
+//! the temperature plus a given number
+float Request_GetTemperature(TemperatureSensor *sensor, int x);
+
 
 
 //! Our SimpleAgent object
@@ -15,43 +22,44 @@ SimpleAgent *agent;
 //! Our temperature sensor device
 TemperatureSensor *temp_sensor;
 
+
 int main() {
 	
 	// Create the agent
 	agent = new SimpleAgent("my_agent");
 	
+	// Add the Request_Repeat request using the name "repeat"
+	agent->AddRequest("repeat", Request_Repeat);
 	
-	// As an example, we can add a temperature sensor device
+	// Add the "Request_Double" request using aliases "double" and "twice"
+	agent->AddRequest({"double", "twice"}, Request_Double, "Doubles a number");
+	
+	
+	
+	// Add a temperature sensor device
 	temp_sensor = agent->NewDevice<TemperatureSensor>("temp_sensor");
 	
-	auto imu = agent->NewDevice<IMU>("imu");
-	imu->Post(imu->magnetic_field);
+	// Set the utc and temperature properties to zero and post them
+	temp_sensor->Post(temp_sensor->utc = 0);
+	temp_sensor->Post(temp_sensor->temperature = 0);
 	
-	// Add a couple of COSMOS properties
-	temp_sensor->Post(temp_sensor->utc);
-	temp_sensor->Post(temp_sensor->temperature);
-	temp_sensor->utc = 0;
-	temp_sensor->temperature = 0;
+	// Add the Request_GetTemperature request to the temperature sensor with
+	// aliases "gettemp" and "temp"
+	temp_sensor->AddRequest({"gettemp", "temp"}, Request_GetTemperature);
 	
 	
-	// Add the "say_hi" request with aliases "say_hi" and "greeting"
-	agent->AddRequest({"say_hi", "greeting"}, Request_SayHi, "Says hi");
-	
-	// Add the "echo" request
-	agent->AddRequest("repeat", Request_Echo, "Repeats what you put in", "I don't know what space is *hint hint*");
 	
 	// Let the agent know all the devices have been set up
 	agent->Finalize();
 	
 	// Show all of the properties and requests added
-	agent->DebugPrint(true);
+	agent->DebugPrint();
 	
+	// A counter which holds a dummy value for the temperature
 	int i = 0;
 	
 	// Start running the agent
 	while ( agent->StartLoop() ) {
-		
-		imu->magnetic_field = Vec3(0, i, 0);
 		
 		// Timestamp the device
 		temp_sensor->utc = currentmjd();
@@ -61,12 +69,14 @@ int main() {
 	return 0;
 }
 
-string Request_SayHi() {
-	return "Hi there!";
+
+
+double Request_Double(double x) {
+	return x * 2;
 }
-string Request_Echo(vector<string> args) {
-	if ( args.size() != 1 )
-		return "Usage: echo word";
-	else
-		return args[0];
+float Request_GetTemperature(TemperatureSensor *sensor, int x) {
+	return sensor->temperature + x;
+}
+std::string Request_Repeat(CapturedInput input) {
+	return input.input;
 }

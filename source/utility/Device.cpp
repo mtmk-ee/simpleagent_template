@@ -1,8 +1,77 @@
 
 #include "utility/Device.h"
 
+#include "utility/SimpleAgent.h"
+
 using namespace std;
 using namespace cubesat;
+
+
+
+int32_t cubesat::DeviceRequestProxy(char *request_str, char* response, Agent *agent_) {
+	
+	// Split the request string into arguments
+	std::vector<std::string> arguments;
+	istringstream iss(request_str);
+	string arg;
+	
+	while ( getline(iss, arg, ' ') )
+		arguments.push_back(arg);
+	
+	// Get the request locator and remove it from the argument list
+	std::string request_locator = arguments[0];
+	arguments.erase(arguments.begin());
+	
+	// Get the device and request names from the request locator
+	std::string device_name = request_locator.substr(0, request_locator.find(":"));
+	std::string request_name = request_locator.substr(request_locator.find(":") + 1);
+	
+	// Find the device
+	SimpleAgent *agent = SimpleAgent::GetInstance();
+	Device *device = agent->GetDevice<Device>(device_name);
+	
+	// Check if the device exists
+	if ( device == nullptr ) {
+		sprintf(response, "Failed to find device %s\n", device_name.c_str());
+		return 0;
+	}
+	
+	// Get the device request
+	DeviceRequest *request = device->GetRequest(request_name);
+	
+	// Make sure the request exists
+	if ( request == nullptr ) {
+		sprintf(response, "Failed to find request %s", request_name.c_str());
+		return 0;
+	}
+	
+	
+	// Clear the request error
+	agent->RaiseRequestError("");
+	
+	// Call the request
+	std::string response_str;
+	bool success = request->Invoke(device, arguments, response_str);
+	
+	// Check if the request callback raised an error
+	const std::string& request_err = agent->GetLastRequestError();
+	
+	// Print the error if one was raised
+	if ( !request_err.empty() ) {
+		sprintf(response, "%s", request_err.c_str());
+		
+		return 0;
+	}
+	else {
+		// Print the response
+		sprintf(response, "%s", response_str.c_str());
+		
+		// Return the status of the operation
+		return success;
+	}
+}
+
+
 
 //===============================================================
 //============================ OTHER ============================

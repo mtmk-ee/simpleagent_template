@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(cosmos-project-simpleagent_template)
+project(simpleagent_template)
 
 #aux_source_directory(. SRC_LIST)
 #add_executable(${PROJECT_NAME} ${SRC_LIST})
@@ -43,23 +43,16 @@ set(COSMOS_LIBS
 
 
 # -----------------------------------------------
-# Windows specific
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-    set(COSMOS_LIBS ${COSMOS_LIBS} ws2_32)
-endif()
-
-
-
 
 include_directories("../include")
 
 
-set(CUBESAT_DEVICE_SRC	utility/SimpleAgent.cpp
+set(SIMPLEAGENT_SRC utility/SimpleAgent.cpp
 						utility/Device.cpp)
-add_library(CubesatDevices STATIC ${CUBESAT_DEVICE_SRC})
-target_link_libraries(CubesatDevices ${COSMOS_LIBS})
+add_library(SimpleAgent STATIC ${SIMPLEAGENT_SRC})
+target_link_libraries(SimpleAgent ${COSMOS_LIBS})
 
-set(CUBESAT_LIBS CubesatDevices)
+set(CUBESAT_LIBS SimpleAgent)
 
 
 

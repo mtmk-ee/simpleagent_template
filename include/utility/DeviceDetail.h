@@ -168,8 +168,8 @@ namespace cubesat {
 	_RegisterProperty("Power Out", tcvstruc, powerout);
 	_RegisterProperty("Max Power", tcvstruc, maxpower);
 	_RegisterProperty("Bandwidth", tcvstruc, band);
-	_RegisterProperty("Good Packet Count", tcvstruc, goodcnt);
-	_RegisterProperty("Bad Packet Count", tcvstruc, badcnt);
+	//_RegisterProperty("Good Packet Count", tcvstruc, goodcnt);
+	//_RegisterProperty("Bad Packet Count", tcvstruc, badcnt);
 	
 	//============ CPU ============
 	_RegisterProperty("Temperature", cpustruc, temp);
