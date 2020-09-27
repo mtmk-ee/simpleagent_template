@@ -27,14 +27,13 @@
 #include "support/jsonlib.h"
 #include "support/jsonclass.h"
 
-#include "cubesat_defs.h"
-#include "utility/Exceptions.h"
-#include "utility/RemoteAgent.h"
-#include "utility/Device.h"
-#include "utility/StringTools.h"
-#include "utility/TimeTools.h"
-#include "utility/AgentRequest.h"
-#include "utility/DeviceRequest.h"
+#include "Exceptions.h"
+#include "RemoteAgent.h"
+#include "Device.h"
+#include "StringTools.h"
+#include "TimeTools.h"
+#include "AgentRequest.h"
+#include "DeviceRequest.h"
 
 #include <functional>
 #include <unordered_map>
@@ -42,6 +41,9 @@
 #pragma GCC diagnostic push
 // Silence annoying warnings about pointer magic
 #pragma GCC diagnostic ignored "-Wpointer-arith"
+
+
+#define DEFAULT_NODE_NAME "cubesat"
 
 
 namespace cubesat {
@@ -57,18 +59,12 @@ namespace cubesat {
 	 * @param agent_ The (complex) agent calling this request
 	 * @return 0 upon success, or a negative value on failure
 	 */
-	int32_t RequestProxy(char *request, char* response, Agent *agent_);
+	int32_t RequestProxy(std::string &request, std::string &response, Agent *agent_);
 	
 	
 	
 	//! A SimpleAgent request (added by default) which prints device properties
-	std::string _Request_DebugPrint(std::vector<std::string> args);
-	
-	//! A SimpleAgent request (added by default) which allows other agents
-	//! to grab properties
-	std::string _Request_GetProperty(std::vector<std::string> args);
-	
-	
+	std::string _Request_DebugPrint();
 	
 	
 	//! You guessed it -- it's a simple agent
@@ -100,7 +96,7 @@ namespace cubesat {
 		 * @param node The node name, defaults to 'cubesat'
 		 * @param crash_if_not_open If true, the program will crash on failure to start the agent
 		 */
-		SimpleAgent(const std::string &name, std::string node = CUBESAT_NODE_NAME,
+                SimpleAgent(const std::string &name, std::string node = DEFAULT_NODE_NAME,
 					bool crash_if_not_open = SIMPLEAGENT_STRICT_MODE);
 		
 		//! Disallow copy construction for safety
@@ -472,15 +468,17 @@ namespace cubesat {
 		
 		/**
 		 * @brief DebugPrint Prints the requests and posted device and node properties for this SimpleAgent
+		 * @param print_all If true, even non-posted properties are printed
 		 */
-		void DebugPrint() const;
+		void DebugPrint(bool print_all = false) const;
 		
 		/**
 		 * @brief DebugPrint Gets the requests and posted device and node properties for this SimpleAgent
 		 * as a formatted string
+		 * @param print_all If true, even non-posted properties are printed
 		 * @return The formatted string
 		 */
-		std::string GetDebugString() const;
+		std::string GetDebugString(bool print_all = false) const;
 		
 		
 		/**

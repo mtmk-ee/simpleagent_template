@@ -8,11 +8,10 @@
 #include "support/jsonlib.h"
 #include "support/jsonclass.h"
 
-#include "cubesat_defs.h"
-#include "utility/Exceptions.h"
-#include "utility/DeviceDetail.h"
-#include "utility/StringTools.h"
-#include "utility/DeviceRequest.h"
+#include "Exceptions.h"
+#include "DeviceDetail.h"
+#include "StringTools.h"
+#include "DeviceRequest.h"
 
 #include <unordered_map>
 
@@ -31,7 +30,7 @@ namespace cubesat {
 	 * @param agent_ The calling agent
 	 * @return A non-negative value upon success
 	 */
-	int32_t DeviceRequestProxy(char *request, char* response, Agent *agent_);
+	int32_t DeviceRequestProxy(std::string &request, std::string &response, Agent *agent_);
 	
 	
 	/**
@@ -343,6 +342,9 @@ namespace cubesat {
 		using __DeviceStruc = DeviceStrucType;
 		static constexpr DeviceType type = type_;
 	};
+	
+	
+	
 	
 	
 	//===============================================================

@@ -8,13 +8,30 @@
 #include "support/jsonlib.h"
 #include "support/jsonclass.h"
 
-#include "utility/DeviceDetail.h"
-#include "utility/StringTools.h"
+#include "DeviceDetail.h"
+#include "StringTools.h"
 
 #include <unordered_map>
 #include <sstream>
 
 namespace cubesat {
+	
+	struct RemoteDeviceProperty {
+		std::string device_name;
+		size_t mem_offset;
+		
+		template <typename PropertyType>
+		RemoteDeviceProperty(const std::string &device_name, PropertyType)
+			: device_name(device_name), mem_offset(PropertyType::offset) {}
+	};
+	
+	template <typename... PropertyTypes>
+	struct RemoteDevicePropertyList {
+		
+		
+		std::tuple<typename PropertyTypes::ValueType...> values;
+		
+	};
 	
 	
 	/**
@@ -149,6 +166,7 @@ namespace cubesat {
 			
 			return values;
 		}
+		
 		
 		
 		/**

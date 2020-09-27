@@ -1,14 +1,14 @@
 
-#include "utility/Device.h"
+#include "Device.h"
 
-#include "utility/SimpleAgent.h"
+#include "SimpleAgent.h"
 
 using namespace std;
 using namespace cubesat;
 
 
 
-int32_t cubesat::DeviceRequestProxy(char *request_str, char* response, Agent *agent_) {
+int32_t cubesat::DeviceRequestProxy(string &request_str, string &response, Agent *agent_) {
 	
 	// Split the request string into arguments
 	std::vector<std::string> arguments;
@@ -32,8 +32,7 @@ int32_t cubesat::DeviceRequestProxy(char *request_str, char* response, Agent *ag
 	
 	// Check if the device exists
 	if ( device == nullptr ) {
-		sprintf(response, "Failed to find device %s\n", device_name.c_str());
-		return 0;
+		return -1;
 	}
 	
 	// Get the device request
@@ -41,8 +40,7 @@ int32_t cubesat::DeviceRequestProxy(char *request_str, char* response, Agent *ag
 	
 	// Make sure the request exists
 	if ( request == nullptr ) {
-		sprintf(response, "Failed to find request %s", request_name.c_str());
-		return 0;
+		return -1;
 	}
 	
 	
@@ -58,13 +56,13 @@ int32_t cubesat::DeviceRequestProxy(char *request_str, char* response, Agent *ag
 	
 	// Print the error if one was raised
 	if ( !request_err.empty() ) {
-		sprintf(response, "%s", request_err.c_str());
+		response = request_err.c_str();
 		
-		return 0;
+		return -1;
 	}
 	else {
 		// Print the response
-		sprintf(response, "%s", response_str.c_str());
+		response = response_str.c_str();
 		
 		// Return the status of the operation
 		return success;

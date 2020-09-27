@@ -1,5 +1,5 @@
 
-#include "utility/SimpleAgent.h"
+#include "SimpleAgent.h"
 
 using namespace std;
 using namespace cubesat;
@@ -24,8 +24,7 @@ SimpleAgent::SimpleAgent(const std::string &name, std::string node,
 			exit(1);
 	}
 	else {
-		//AddRequest("print", _Request_DebugPrint, "Prints all added devices and requests");
-		//AddRequest("getproperty", _Request_GetProperty, "Gets one or more properties from this SimpleAgent");
+		AddRequest("print", _Request_DebugPrint, "Prints all added devices and requests");
 	}
 	
 	this->loop_started = false;
@@ -130,7 +129,7 @@ RemoteAgent SimpleAgent::FindAgent(const std::string &name, const std::string &n
 //============================ DEBUG ============================
 //===============================================================
 
-void SimpleAgent::DebugPrint() const {
+void SimpleAgent::DebugPrint(bool print_all) const {
 	
 	// Print all devices
 	printf("Devices\n");
@@ -147,7 +146,7 @@ void SimpleAgent::DebugPrint() const {
 	// Print all node properties
 	printf("Node Properties\n");
 	for (auto node_property_pair : node_properties) {
-		if ( node_property_pair.second.post )
+		if ( print_all || node_property_pair.second.post )
 			printf("|\t| Property '%s' (aka %s): %s\n",
 				   node_property_pair.second.readable_name.c_str(),
 				   node_property_pair.second.cosmos_name.c_str(),
@@ -155,7 +154,7 @@ void SimpleAgent::DebugPrint() const {
 	}
 }
 
-std::string SimpleAgent::GetDebugString() const {
+std::string SimpleAgent::GetDebugString(bool print_all) const {
 	
 	std::stringstream ss;
 	
@@ -175,7 +174,7 @@ std::string SimpleAgent::GetDebugString() const {
 	// Print all node properties
 	ss << "Node Properties\n";
 	for (auto node_property_pair : node_properties) {
-		if ( node_property_pair.second.post )
+		if ( print_all || node_property_pair.second.post )
 			ss << "|\t| Property '" << node_property_pair.second.readable_name
 				  << "' (aka " << node_property_pair.second.cosmos_name
 				  << "): " << node_property_pair.second.value_string << "\n";
@@ -189,7 +188,12 @@ std::string SimpleAgent::GetDebugString() const {
 //=========================== SUPPORT ===========================
 //===============================================================
 
-int32_t cubesat::RequestProxy(char *request_str, char* response, Agent *agent_) {
+int32_t cubesat::RequestProxy(std::string &request_str_, std::string &response, Agent *agent_) {
+
+    // Something's up with the request string length, so for now we can
+    // copy it and change its length as a quick fix
+    std::string request_str = request_str_;
+    request_str.assign(request_str.c_str(), strlen(request_str.c_str()));
 	
 	// Split the request string into arguments
 	std::vector<std::string> arguments;
@@ -209,8 +213,7 @@ int32_t cubesat::RequestProxy(char *request_str, char* response, Agent *agent_) 
 	
 	// Make sure the request exists
 	if ( request == nullptr ) {
-		sprintf(response, "Failed to find request %s", request_name.c_str());
-		return 0;
+		return -1;
 	}
 	
 	// Clear the request error
@@ -225,13 +228,13 @@ int32_t cubesat::RequestProxy(char *request_str, char* response, Agent *agent_) 
 	
 	// Print the error if one was raised
 	if ( !request_err.empty() ) {
-		sprintf(response, "%s", request_err.c_str());
+		response = request_err;
 		
 		return 0;
 	}
 	else {
 		// Print the response
-		sprintf(response, "%s", response_str.c_str());
+		response = response_str.c_str();
 		
 		// Return the status of the operation
 		return success;
@@ -240,56 +243,7 @@ int32_t cubesat::RequestProxy(char *request_str, char* response, Agent *agent_) 
 
 
 
-std::string cubesat::_Request_DebugPrint(std::vector<std::string> args) {
-	// Check if all properties should be listed
-	if ( args.size() == 1 ) {
-		if ( args[0] == "all" )
-			return SimpleAgent::GetInstance()->GetDebugString();
-	}
-	
-	return SimpleAgent::GetInstance()->GetDebugString();
-}
-
-std::string cubesat::_Request_GetProperty(std::vector<std::string> args) {
-	
-	// Make sure arguments are supplied
-	if ( args.size() == 0 )
-		return "";
-	
-	SimpleAgent *agent = SimpleAgent::GetInstance();
-	
-	stringstream output;
-	output << "{";
-	
-	// Go through each given device
-//	for (const std::string &arg : args) {
-		
-//		// Get the device:property delimiter
-//		unsigned int colon_index = arg.find(":");
-		
-//		// Make sure the format is correct
-//		if ( colon_index == string::npos ) {
-//			return "";
-//		}
-		
-//		// Get the device and property names
-//		string device_name = arg.substr(0, colon_index);
-//		string property_name = arg.substr(colon_index + 1);
-		
-//		// Make sure the device exists
-//		if ( !agent->DeviceExists(device_name) )
-//			continue;
-		
-//		Device *device = agent->GetDevice(device_name);
-//		std::string value = device->GetPropertyStringByName(property_name);
-		
-//		if ( !value.empty() ) {
-//			output << "\"" << device_name << "\": \"" << value << "\", ";
-//		}
-//	}
-	
-	output << "}";
-	
+std::string cubesat::_Request_DebugPrint() {
 	return SimpleAgent::GetInstance()->GetDebugString();
 }
 
